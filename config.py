@@ -77,11 +77,11 @@ MIN_RISK_REWARD = 2.0
 RISK_PER_TRADE = 0.01
 
 # INITIAL_BALANCE: стартовый баланс для paper trading (USDT).
-INITIAL_BALANCE = 1000.0
+INITIAL_BALANCE = 100.0
 
 # LEVERAGE: кредитное плечо. 10 = позиция в 10 раз больше залога.
 #   Больше плечо = больше прибыль И убыток.
-LEVERAGE = 10
+LEVERAGE = 5
 
 # MOVE_TO_BREAKEVEN_PCT: при какой прибыли (%) переносим стоп
 #   в безубыток. 0.5 = когда сделка в плюсе на 0.5%.

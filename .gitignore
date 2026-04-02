@@ -40,3 +40,5 @@ allure-report/
 
 # Файлы сессии
 *.session
+
+logs/

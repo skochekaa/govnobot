@@ -11,10 +11,8 @@
 # Обычный ccxt делает HTTP-запросы (медленно для скальпинга).
 # ccxt.pro держит постоянное соединение и получает данные мгновенно.
 
-import asyncio
 import ccxt.pro as ccxtpro
 import numpy as np
-from datetime import datetime
 import config
 
 
