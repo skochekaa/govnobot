@@ -10,6 +10,22 @@ from log_setup import setup_logger
 log = setup_logger("levels")
 
 
+def _price_precision(price: float) -> int:
+    """Определяет количество знаков после запятой для округления цены."""
+    if price <= 0:
+        return 8
+    if price >= 1000:
+        return 1
+    elif price >= 100:
+        return 2
+    elif price >= 1:
+        return 4
+    elif price >= 0.01:
+        return 6
+    else:
+        return 8
+
+
 def calculate_atr(candles: np.ndarray, period: int = None) -> float:
     if period is None:
         period = config.ATR_PERIOD
@@ -78,7 +94,7 @@ def cluster_levels(prices: list[float], atr: float,
     levels = []
     for cluster in clusters:
         levels.append({
-            "price": round(float(np.mean(cluster)), 2),
+            "price": round(float(np.mean(cluster)), _price_precision(float(np.mean(cluster)))),
             "strength": len(cluster),
         })
     return levels
@@ -241,7 +257,8 @@ def _merge_weighted_levels(levels: list[dict], atr: float) -> list[dict]:
 
 def _combine_group(group: list[dict]) -> dict:
     """Объединяет группу близких уровней в один."""
-    avg_price = round(float(np.mean([l["price"] for l in group])), 2)
+    raw_price = float(np.mean([l["price"] for l in group]))
+    avg_price = round(raw_price, _price_precision(raw_price))
     total_strength = sum(l["strength"] for l in group)
     source_tfs = list(set(l.get("source_tf", "?") for l in group))
 
@@ -279,7 +296,8 @@ def detect_consolidation(candles: np.ndarray, range_pct: float = 1.5,
                 else:
                     break
             ranges.append({
-                "low": round(range_low, 2), "high": round(range_high, 2),
+                "low": round(range_low, _price_precision(range_low)),
+                "high": round(range_high, _price_precision(range_high)),
                 "start_idx": i, "length": end - i,
             })
             i = end

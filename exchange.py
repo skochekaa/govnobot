@@ -49,15 +49,23 @@ class Exchange:
         self._running = True
         log.info("Подключено к %s (%d пар)", config.EXCHANGE_ID, len(self.exchange.markets))
 
+    def validate_symbol(self, symbol: str) -> bool:
+        """Проверяет, существует ли символ на бирже."""
+        return symbol in self.exchange.markets
+
+    def filter_valid_symbols(self, symbols: list[str]) -> list[str]:
+        """Возвращает только валидные символы, логирует невалидные."""
+        valid = []
+        for s in symbols:
+            if self.validate_symbol(s):
+                valid.append(s)
+            else:
+                log.warning("Символ %s не найден на бирже, пропускаем", s)
+        return valid
+
     async def close(self):
         self._running = False
-        # Отменяем все фоновые стримы
-        for task in self._stream_tasks:
-            task.cancel()
-        # Ждём завершения
-        if self._stream_tasks:
-            await asyncio.gather(*self._stream_tasks, return_exceptions=True)
-        self._stream_tasks = []
+        await self.stop_streams()
         await self.exchange.close()
         log.info("Соединение закрыто, стримы остановлены")
 
@@ -69,6 +77,7 @@ class Exchange:
         Загружает историческре свечи через REST API.
         Вызывается ОДИН РАЗ при старте, до включения WebSocket.
         """
+        symbols = self.filter_valid_symbols(symbols)
         log.info("Загрузка истории для %d монет × %d ТФ...",
                  len(symbols), len(timeframes))
 
@@ -109,8 +118,9 @@ class Exchange:
         Для 7 монет × 4 ТФ = 28 стримов свечей + 7 стримов сделок
         + 1 стрим тикеров.
         """
-        self.stop_streams()
+        await self.stop_streams()
 
+        symbols = self.filter_valid_symbols(symbols)
         all_symbols = list(set(symbols + ["BTC/USDT:USDT"]))
 
         for symbol in all_symbols:
@@ -126,18 +136,21 @@ class Exchange:
             )
             self._stream_tasks.append(task)
 
-        # Стрим тикеров (текущие цены)
-        task = asyncio.create_task(self._stream_tickers(all_symbols))
-        self._stream_tasks.append(task)
+        # Стрим тикеров (текущие цены) — по одному на символ
+        for symbol in all_symbols:
+            task = asyncio.create_task(self._stream_single_ticker(symbol))
+            self._stream_tasks.append(task)
 
         total = len(self._stream_tasks)
         log.info("Запущено %d WebSocket стримов (%d монет × %d ТФ + trades + tickers)",
                  total, len(all_symbols), len(timeframes))
 
-    def stop_streams(self):
-        """Останавливает все фоновые стримы."""
+    async def stop_streams(self):
+        """Останавливает все фоновые стримы и ждёт их завершения."""
         for task in self._stream_tasks:
             task.cancel()
+        if self._stream_tasks:
+            await asyncio.gather(*self._stream_tasks, return_exceptions=True)
         self._stream_tasks = []
 
     async def restart_streams(self, symbols: list[str],
@@ -212,29 +225,24 @@ class Exchange:
                 log.debug("WS trades %s: %s", symbol, e)
                 await asyncio.sleep(1)
 
-    async def _stream_tickers(self, symbols: list[str]):
-        """
-        Фоновый цикл: слушает обновления цен.
-        Один стрим на все символы (эффективнее чем по одному).
-        """
+    async def _stream_single_ticker(self, symbol: str):
+        """Фоновый цикл: слушает обновления цены одного символа."""
         while self._running:
             try:
-                # watch_tickers не всегда доступен, фолбэк на watch_ticker
-                for symbol in symbols:
-                    ticker = await self.exchange.watch_ticker(symbol)
-                    self._ticker_cache[symbol] = {
-                        'last': ticker['last'],
-                        'bid': ticker['bid'],
-                        'ask': ticker['ask'],
-                        'volume': ticker.get('quoteVolume', 0),
-                        'change': ticker.get('percentage', 0),
-                        'timestamp': ticker.get('timestamp', 0),
-                    }
+                ticker = await self.exchange.watch_ticker(symbol)
+                self._ticker_cache[symbol] = {
+                    'last': ticker['last'],
+                    'bid': ticker['bid'],
+                    'ask': ticker['ask'],
+                    'volume': ticker.get('quoteVolume', 0),
+                    'change': ticker.get('percentage', 0),
+                    'timestamp': ticker.get('timestamp', 0),
+                }
             except asyncio.CancelledError:
                 return
             except Exception as e:
-                log.debug("WS tickers: %s", e)
-                await asyncio.sleep(1)
+                log.debug("WS ticker %s: %s", symbol, e)
+                await asyncio.sleep(5)
 
     # ── Чтение из кэша (МГНОВЕННО, без запросов) ──
 
@@ -315,7 +323,6 @@ class Exchange:
         if len(existing) == 0:
             return new_data
 
-        last_existing_ts = existing[-1, 0]
         result = existing.copy()
 
         for row in new_data:

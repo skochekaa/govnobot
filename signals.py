@@ -9,11 +9,16 @@
 
 import numpy as np
 import config
-from levels import calculate_atr
+from levels import calculate_atr, _price_precision
 from volume_analyzer import check_trend_confirmation
 from log_setup import setup_logger
 
 log = setup_logger("signals")
+
+
+def _round_price(price: float) -> float:
+    """Округляет цену с учётом её порядка."""
+    return round(price, _price_precision(price))
 
 
 # ── Подтверждение на 15m (тренд) ────────────
@@ -319,8 +324,8 @@ def _calculate_bounce_trade(direction, level_price, levels, atr):
     if risk == 0:
         return None
 
-    return {"entry": round(entry, 2), "stop": round(stop, 2),
-            "take": round(take, 2), "risk_reward": round(reward / risk, 2)}
+    return {"entry": _round_price(entry), "stop": _round_price(stop),
+            "take": _round_price(take), "risk_reward": round(reward / risk, 2)}
 
 
 def _calculate_breakout_trade(direction, level_price, levels, atr):
@@ -342,8 +347,8 @@ def _calculate_breakout_trade(direction, level_price, levels, atr):
     reward = abs(take - entry)
     if risk == 0:
         return None
-    return {"entry": round(entry, 2), "stop": round(stop, 2),
-            "take": round(take, 2), "risk_reward": round(reward / risk, 2)}
+    return {"entry": _round_price(entry), "stop": _round_price(stop),
+            "take": _round_price(take), "risk_reward": round(reward / risk, 2)}
 
 
 def _evaluate_signal_strength(level, rejection, volume):
@@ -457,6 +462,13 @@ def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
                 reward = abs(sig["take"] - sig["entry"])
                 if risk > 0:
                     sig["risk_reward"] = round(reward / risk, 2)
+                    if sig["risk_reward"] < config.MIN_RISK_REWARD:
+                        log.debug("%s %s RR %.2f < %.1f после 1m рефайна, пропуск",
+                                  symbol, sig["type"], sig["risk_reward"],
+                                  config.MIN_RISK_REWARD)
+                        continue
+                else:
+                    continue
         after_entry.append(sig)
 
     # Шаг 4: BTC-фильтр

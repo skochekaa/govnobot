@@ -30,6 +30,14 @@ class PaperTrader:
 
         entry = signal["entry"]
         stop = signal["stop"]
+        take = signal["take"]
+
+        # Защита: entry, stop, take не должны совпадать
+        if entry == stop or entry == take:
+            log.warning("%s: entry=stop или entry=take (%.8f/%.8f/%.8f), пропуск",
+                        symbol, entry, stop, take)
+            return None
+
         risk_amount = self.balance * config.RISK_PER_TRADE
         stop_distance_pct = abs(entry - stop) / entry
 
