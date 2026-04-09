@@ -146,8 +146,9 @@ class PaperTrader:
             pnl_pct = (trade["entry_price"] - close_price) / trade["entry_price"] * 100
 
         pnl_raw = trade["position_usdt"] * (pnl_pct / 100)
-        # Комиссия: вход + выход (taker fee × 2)
-        fee = trade["position_usdt"] * config.TAKER_FEE_PCT / 100 * 2
+        # Комиссия: вход + выход (taker fee × 2), минус возврат от брокера
+        fee_gross = trade["position_usdt"] * config.TAKER_FEE_PCT / 100 * 2
+        fee = fee_gross * (1 - config.FEE_REBATE_PCT)
         pnl = pnl_raw - fee
         trade["pnl"] = round(pnl, 2)
         trade["pnl_pct"] = round(pnl / trade["position_usdt"] * 100, 4)

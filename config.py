@@ -96,7 +96,8 @@ RISK_PER_TRADE = 0.01
 INITIAL_BALANCE = 1000.0
 LEVERAGE = 10
 MOVE_TO_BREAKEVEN_PCT = 0.5
-TAKER_FEE_PCT = 0.04  # Binance futures taker fee (0.04%)
+TAKER_FEE_PCT = 0.04   # Binance futures taker fee (0.04%)
+FEE_REBATE_PCT = 0.35  # Возврат комиссии от брокера (35%)
 
 # ── Интервалы обновления ─────────────────────
 UPDATE_INTERVAL = 5
