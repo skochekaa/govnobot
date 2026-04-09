@@ -160,7 +160,7 @@ class Exchange:
         Вызывается при пересканировании.
         """
         log.info("Перезапуск стримов для нового watchlist...")
-        self.stop_streams()
+        await self.stop_streams()
         await self.preload_history(symbols, timeframes)
         await self.start_streams(symbols, timeframes)
 
