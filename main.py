@@ -60,7 +60,11 @@ async def run_bot():
         await exchange.connect()
 
         # 2. Сканер отбирает монеты
-        watchlist = await scanner.scan()
+        raw_watchlist = await scanner.scan()
+        watchlist = exchange.filter_valid_symbols(raw_watchlist)
+        if not watchlist:
+            log.error("Нет валидных символов в watchlist! Проверьте WATCHLIST_FALLBACK")
+            return
         log.info("Watchlist: %s", watchlist)
 
         # 3. Загружаем историю (REST, один раз)
@@ -81,11 +85,11 @@ async def run_bot():
             # Пересканировать?
             if await scanner.should_rescan():
                 log.info("Пересканирование рынка...")
-                new_watchlist = await scanner.scan()
-                if new_watchlist != watchlist:
+                raw_new = await scanner.scan()
+                new_watchlist = exchange.filter_valid_symbols(raw_new)
+                if new_watchlist and new_watchlist != watchlist:
                     watchlist = new_watchlist
                     log.info("Новый watchlist: %s", watchlist)
-                    # Перезапуск стримов для новых монет
                     await exchange.restart_streams(watchlist, ALL_TFS)
                     await asyncio.sleep(3)
 

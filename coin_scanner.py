@@ -25,6 +25,8 @@ class CoinScanner:
 
         if not all_tickers:
             log.warning("Не удалось получить тикеры, используем запасной список")
+            self.last_scan_time = time.time()
+            self.current_watchlist = config.WATCHLIST_FALLBACK
             return config.WATCHLIST_FALLBACK
 
         log.info("Найдено %d фьючерсных пар", len(all_tickers))
