@@ -145,9 +145,13 @@ class PaperTrader:
         else:
             pnl_pct = (trade["entry_price"] - close_price) / trade["entry_price"] * 100
 
-        pnl = trade["position_usdt"] * (pnl_pct / 100)
+        pnl_raw = trade["position_usdt"] * (pnl_pct / 100)
+        # Комиссия: вход + выход (taker fee × 2)
+        fee = trade["position_usdt"] * config.TAKER_FEE_PCT / 100 * 2
+        pnl = pnl_raw - fee
         trade["pnl"] = round(pnl, 2)
-        trade["pnl_pct"] = round(pnl_pct, 4)
+        trade["pnl_pct"] = round(pnl / trade["position_usdt"] * 100, 4)
+        trade["fee"] = round(fee, 2)
 
         if pnl > 0:
             trade["result"] = "win"
@@ -163,10 +167,10 @@ class PaperTrader:
         self.balance += pnl
         self.trade_history.append(trade)
 
-        log.info("CLOSE %s %s | %s → %s | %s | PnL: %+.2f USDT (%+.2f%%) | Balance: %.2f",
+        log.info("CLOSE %s %s | %s → %s | %s | PnL: %+.2f USDT (fee: %.2f) | Balance: %.2f",
                  result_label, symbol,
                  trade["entry_price"], close_price, reason,
-                 pnl, pnl_pct, self.balance)
+                 pnl, fee, self.balance)
 
     def get_stats(self) -> dict:
         closed = [t for t in self.trade_history if t["status"] == "closed"]
