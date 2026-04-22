@@ -1,7 +1,7 @@
 # trader.py — Paper Trading (симуляция сделок)
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import config
 from log_setup import setup_logger
 
@@ -17,8 +17,72 @@ class PaperTrader:
         self.max_trades_per_symbol = 1
         self.max_open_trades = 3
 
+        # Daily loss limit tracking
+        self._day_start_balance = self.balance
+        self._day_start_date = datetime.now(timezone.utc).date()
+        self._halt_logged_date = None
+
+        # Circuit breaker tracking
+        self._consecutive_losses = 0
+        self._pause_until = 0.0  # unix timestamp
+
+    def _check_day_reset(self):
+        """Сбрасывает дневной baseline при смене даты (UTC)."""
+        today = datetime.now(timezone.utc).date()
+        if today != self._day_start_date:
+            log.info("Новый день UTC: старт баланс = %.2f USDT", self.balance)
+            self._day_start_date = today
+            self._day_start_balance = self.balance
+            self._halt_logged_date = None
+
+    def is_paused(self) -> bool:
+        """
+        True если circuit breaker активен (пауза после серии убытков).
+        Автоматически сбрасывается когда пауза истекает.
+        """
+        if not config.CIRCUIT_BREAKER_ENABLED:
+            return False
+        if self._pause_until > time.time():
+            return True
+        if self._pause_until > 0:
+            # Пауза только что истекла
+            self._pause_until = 0.0
+            log.info("Circuit breaker: пауза закончилась, торговля возобновлена")
+        return False
+
+    def is_trading_halted(self) -> bool:
+        """
+        True если дневной убыток превысил DAILY_LOSS_LIMIT_PCT.
+        Автоматически сбрасывается на следующий день (UTC).
+        """
+        if not config.DAILY_LOSS_LIMIT_ENABLED:
+            return False
+        self._check_day_reset()
+        if self._day_start_balance <= 0:
+            return False
+        daily_pnl_pct = (self.balance - self._day_start_balance) / self._day_start_balance * 100
+        if daily_pnl_pct <= -config.DAILY_LOSS_LIMIT_PCT:
+            if self._halt_logged_date != self._day_start_date:
+                log.warning("Дневной лимит убытка достигнут: %.2f%% (≤ -%.2f%%). "
+                            "Новые сделки не открываются до следующего дня.",
+                            daily_pnl_pct, config.DAILY_LOSS_LIMIT_PCT)
+                self._halt_logged_date = self._day_start_date
+            return True
+        return False
+
     def open_trade(self, signal: dict) -> dict | None:
         symbol = signal["symbol"]
+
+        # Daily loss limit — стоп открытий при исчерпании дневного лимита
+        if self.is_trading_halted():
+            log.debug("%s: торговля остановлена (дневной лимит убытка)", symbol)
+            return None
+
+        # Circuit breaker — пауза после серии убытков
+        if self.is_paused():
+            log.debug("%s: пауза circuit breaker до %s", symbol,
+                      datetime.fromtimestamp(self._pause_until).isoformat(timespec='seconds'))
+            return None
 
         if symbol in self.open_trades:
             log.debug("%s: уже есть открытая сделка, пропуск", symbol)
@@ -27,6 +91,16 @@ class PaperTrader:
         if len(self.open_trades) >= self.max_open_trades:
             log.debug("Лимит открытых сделок (%d)", self.max_open_trades)
             return None
+
+        # Correlation filter: лимит сделок в одном направлении
+        if config.CORRELATION_FILTER_ENABLED:
+            direction = signal["direction"]
+            same_dir = sum(1 for t in self.open_trades.values()
+                           if t["direction"] == direction)
+            if same_dir >= config.MAX_CORRELATED_TRADES:
+                log.info("%s: correlation limit — уже %d сделок %s (макс %d), пропуск",
+                         symbol, same_dir, direction, config.MAX_CORRELATED_TRADES)
+                return None
 
         entry = signal["entry"]
         stop = signal["stop"]
@@ -172,6 +246,19 @@ class PaperTrader:
                  result_label, symbol,
                  trade["entry_price"], close_price, reason,
                  pnl, fee, self.balance)
+
+        # Circuit breaker: учёт серии убытков
+        if trade["result"] == "loss":
+            self._consecutive_losses += 1
+            if (config.CIRCUIT_BREAKER_ENABLED
+                    and self._consecutive_losses >= config.CIRCUIT_BREAKER_LOSSES):
+                self._pause_until = time.time() + config.CIRCUIT_BREAKER_PAUSE_MINUTES * 60
+                log.warning("Circuit breaker: %d убытков подряд, пауза %d минут",
+                            self._consecutive_losses, config.CIRCUIT_BREAKER_PAUSE_MINUTES)
+                self._consecutive_losses = 0
+        else:
+            # прибыль или breakeven — сбрасываем серию
+            self._consecutive_losses = 0
 
     def get_stats(self) -> dict:
         closed = [t for t in self.trade_history if t["status"] == "closed"]

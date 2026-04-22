@@ -94,14 +94,18 @@ class Exchange:
                 except Exception as e:
                     log.error("Ошибка загрузки %s %s: %s", symbol, tf, e)
 
-        # Также загружаем BTC для корреляции
+        # Также загружаем BTC для корреляции (5m) и regime detection (1h)
         btc = "BTC/USDT:USDT"
         self._candle_cache.setdefault(btc, {})
-        try:
-            ohlcv = await self.exchange.fetch_ohlcv(btc, config.TF_WORK, limit=200)
-            self._candle_cache[btc][config.TF_WORK] = np.array(ohlcv, dtype=float)
-        except Exception as e:
-            log.error("Ошибка загрузки BTC: %s", e)
+        btc_timeframes = {config.TF_WORK, config.TF_SENIOR}
+        for btc_tf in btc_timeframes:
+            limit = config.TF_CANDLE_LIMITS.get(btc_tf, 200)
+            try:
+                ohlcv = await self.exchange.fetch_ohlcv(btc, btc_tf, limit=limit)
+                self._candle_cache[btc][btc_tf] = np.array(ohlcv, dtype=float)
+                log.debug("Загружено BTC %s: %d свечей", btc_tf, len(ohlcv))
+            except Exception as e:
+                log.error("Ошибка загрузки BTC %s: %s", btc_tf, e)
 
         log.info("История загружена")
 

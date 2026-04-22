@@ -22,6 +22,10 @@ EXCLUDED_STABLECOINS = {
     "USDC", "BUSD", "DAI", "TUSD", "FDUSD", "USDP",
     "WBTC", "WETH", "STETH", "BTCDOM", "DEFI",
 }
+# Blacklist убыточных монет — не торгуем их даже если scanner выбрал.
+# Основано на статистике сделок (убыток на монете за длительный период).
+# Можно пополнять по мере выявления проблемных монет.
+COIN_BLACKLIST = {"1000BONK", "1000PEPE"}
 WATCHLIST_FALLBACK = [
     "1000PEPE/USDT:USDT", "WIF/USDT:USDT", "DOGE/USDT:USDT",
     "1000BONK/USDT:USDT", "1000FLOKI/USDT:USDT",
@@ -102,6 +106,50 @@ FEE_REBATE_PCT = 0.35  # Возврат комиссии от брокера (35
 # ── Интервалы обновления ─────────────────────
 UPDATE_INTERVAL = 5
 
+# ── Circuit Breaker ───────────────────────────
+# После N убыточных сделок подряд — пауза на M минут.
+# Защита от серийных потерь при резком изменении рынка.
+# Счётчик сбрасывается после любой прибыльной сделки или после срабатывания.
+CIRCUIT_BREAKER_ENABLED = False
+CIRCUIT_BREAKER_LOSSES = 5
+CIRCUIT_BREAKER_PAUSE_MINUTES = 60
+
+# ── Daily Loss Limit ──────────────────────────
+# Если дневной убыток превысил DAILY_LOSS_LIMIT_PCT от стартового баланса дня,
+# новые сделки не открываются до следующего календарного дня (UTC).
+# Существующие сделки продолжают управляться (стопы/тейки).
+DAILY_LOSS_LIMIT_ENABLED = False
+DAILY_LOSS_LIMIT_PCT = 3.0
+
+# ── ATR Filter ────────────────────────────────
+# Пропускает сигналы если волатильность экстремальная:
+#   - ATR > ATR_MAX_PCT% от цены → рынок в хаосе (новости, паника), стопы рвутся
+#   - ATR < ATR_MIN_PCT% от цены → рынок плоский, движения меньше спреда+комиссий
+# ATR берётся с рабочего ТФ (5m) из levels["atr"].
+ATR_FILTER_ENABLED = False
+ATR_MAX_PCT = 3.0
+ATR_MIN_PCT = 0.1
+
+# ── Correlation Filter ────────────────────────
+# Ограничивает сколько сделок можно открыть в одном направлении одновременно.
+# Альткоины сильно коррелированы — если открыто 3 longs и BTC дампит,
+# все 3 идут в минус одновременно. Лимит защищает от каскадных потерь.
+#
+# MAX_CORRELATED_TRADES = 2 означает: максимум 2 longs ИЛИ 2 shorts активны.
+# Общий лимит max_open_trades из PaperTrader работает независимо.
+CORRELATION_FILTER_ENABLED = False
+MAX_CORRELATED_TRADES = 2
+
+# ── Session Filter ────────────────────────────
+# Торговля только в активные часы (UTC).
+# Формат: список кортежей (start_hour, end_hour), end НЕ включается.
+# По умолчанию (12, 20) UTC = 15:00-23:00 МСК — overlap US+EU сессий.
+# Можно задать несколько окон или окно через полночь, например (22, 4).
+# Уже открытые сделки продолжают управляться независимо от сессии
+# (только блокируется ОТКРЫТИЕ новых).
+SESSION_FILTER_ENABLED = False
+TRADING_SESSIONS = [(12, 20)]
+
 # ── Логирование ──────────────────────────────
 LOG_DIR = "logs"
 TRADE_LOG_FILE = "trades.json"
@@ -111,3 +159,42 @@ TRADE_CSV_FILE = "trades.csv"
 BTC_CORRELATION_CHECK = True
 BTC_DUMP_THRESHOLD = -1.0
 BTC_PUMP_THRESHOLD = 1.0
+
+# ── Pattern Filter ────────────────────────────
+# По умолчанию ВСЕ паттерны разрешены (PATTERN_FILTER_ENABLED = False).
+# Если включить, то будут торговаться ТОЛЬКО сигналы чей reason содержит
+# одну из подстрок в ENABLED_PATTERNS.
+#
+# Доступные паттерны (reason в сигнале):
+#   "5m bullish candle at support"         — бычья свеча у поддержки (лонг)
+#   "5m momentum slowdown at support"      — замедление у поддержки (лонг)
+#   "5m rejection wick at support"         — проколы у поддержки (лонг)
+#   "5m bearish candle at resistance"      — медвежья свеча у сопротивления (шорт)
+#   "5m momentum slowdown at resistance"   — замедление у сопротивления (шорт)
+#   "5m rejection wick at resistance"      — проколы у сопротивления (шорт)
+#   "breakout"                              — пробой уровня (breakout above/below)
+PATTERN_FILTER_ENABLED = False
+ENABLED_PATTERNS = {
+    "5m bullish candle at support",
+    "5m momentum slowdown at support",
+    "5m rejection wick at support",
+    "5m bearish candle at resistance",
+    "5m momentum slowdown at resistance",
+    "5m rejection wick at resistance",
+    "breakout",
+}
+
+# ── Market Regime Filter ──────────────────────
+# Определяет режим рынка по BTC 1h:
+#   BULL  — рынок растёт  → блокируем шорты
+#   BEAR  — рынок падает  → блокируем лонги
+#   RANGE — боковик       → разрешаем оба направления
+# Это экономит убытки от торговли против тренда.
+REGIME_FILTER_ENABLED = True
+REGIME_BLOCK_COUNTER_TREND = True
+
+# Параметры детекции (можно тонко настроить):
+REGIME_SMA_FAST = 20              # период быстрой SMA
+REGIME_SMA_SLOW = 50              # период медленной SMA
+REGIME_SLOPE_LOOKBACK = 10        # за сколько свечей считать наклон
+REGIME_SLOPE_THRESHOLD_PCT = 0.5  # минимальный наклон в % для тренда
