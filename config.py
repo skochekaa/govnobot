@@ -126,7 +126,7 @@ DAILY_LOSS_LIMIT_PCT = 3.0
 #   - ATR > ATR_MAX_PCT% от цены → рынок в хаосе (новости, паника), стопы рвутся
 #   - ATR < ATR_MIN_PCT% от цены → рынок плоский, движения меньше спреда+комиссий
 # ATR берётся с рабочего ТФ (5m) из levels["atr"].
-ATR_FILTER_ENABLED = False
+ATR_FILTER_ENABLED = True
 ATR_MAX_PCT = 3.0
 ATR_MIN_PCT = 0.1
 
@@ -137,7 +137,7 @@ ATR_MIN_PCT = 0.1
 #
 # MAX_CORRELATED_TRADES = 2 означает: максимум 2 longs ИЛИ 2 shorts активны.
 # Общий лимит max_open_trades из PaperTrader работает независимо.
-CORRELATION_FILTER_ENABLED = False
+CORRELATION_FILTER_ENABLED = True
 MAX_CORRELATED_TRADES = 2
 
 # ── Session Filter ────────────────────────────
