@@ -12,7 +12,7 @@
 
 import asyncio
 import signal
-from datetime import datetime
+from datetime import datetime, timezone
 
 import config
 from log_setup import setup_logger
@@ -35,6 +35,31 @@ def handle_shutdown(signum, frame):
     global running
     log.info("Получен сигнал остановки...")
     running = False
+
+
+def is_in_active_session() -> bool:
+    """
+    Проверяет, находится ли текущий час (UTC) в одном из окон
+    config.TRADING_SESSIONS. Возвращает True если фильтр отключён
+    или список пуст.
+
+    Поддерживает окна через полночь (start > end), например (22, 4).
+    """
+    if not config.SESSION_FILTER_ENABLED:
+        return True
+    sessions = config.TRADING_SESSIONS
+    if not sessions:
+        return True
+    now_hour = datetime.now(timezone.utc).hour
+    for start, end in sessions:
+        if start <= end:
+            if start <= now_hour < end:
+                return True
+        else:
+            # Окно через полночь, например (22, 4)
+            if now_hour >= start or now_hour < end:
+                return True
+    return False
 
 
 async def run_bot():
@@ -124,8 +149,12 @@ async def process_cycle(exchange: Exchange, trader: PaperTrader,
     # Цены из кэша (мгновенно)
     current_prices = exchange.get_all_prices(watchlist)
 
-    # BTC-свечи для корреляции (из кэша)
+    # BTC-свечи для корреляции (5m) и market regime (1h)
     btc_candles = exchange.get_candles("BTC/USDT:USDT", config.TF_WORK)
+    btc_senior_candles = exchange.get_candles("BTC/USDT:USDT", config.TF_SENIOR)
+
+    # Проверка торговой сессии (один раз на цикл)
+    session_active = is_in_active_session()
 
     for symbol in watchlist:
         try:
@@ -155,7 +184,9 @@ async def process_cycle(exchange: Exchange, trader: PaperTrader,
             # MTF-сигналы
             signals = generate_signals_mtf(
                 candles_by_tf, levels, volume,
-                btc_candles=btc_candles, symbol=symbol,
+                btc_candles=btc_candles,
+                btc_senior_candles=btc_senior_candles,
+                symbol=symbol,
             )
 
             for sig in signals:
@@ -164,7 +195,11 @@ async def process_cycle(exchange: Exchange, trader: PaperTrader,
             if signals and symbol not in trader.open_trades:
                 best = signals[0]
                 if best["strength"] in ("strong", "medium"):
-                    trader.open_trade(best)
+                    if session_active:
+                        trader.open_trade(best)
+                    else:
+                        log.debug("%s: вне активной сессии, сделка не открыта",
+                                  symbol)
 
         except Exception as e:
             log.warning("Ошибка %s: %s", symbol, e)

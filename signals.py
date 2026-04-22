@@ -11,6 +11,7 @@ import numpy as np
 import config
 from levels import calculate_atr, _price_precision
 from volume_analyzer import check_trend_confirmation
+from market_regime import detect_regime, is_direction_allowed
 from log_setup import setup_logger
 
 log = setup_logger("signals")
@@ -409,10 +410,14 @@ def check_btc_filter(btc_candles, signal_direction):
 def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
                           levels: dict, volume: dict,
                           btc_candles: np.ndarray = None,
+                          btc_senior_candles: np.ndarray = None,
                           symbol: str = "") -> list[dict]:
     """
     Генерирует сигналы с полной MTF-цепочкой:
       1h уровни → 15m подтверждение → 5m сигнал → 1m вход
+
+    btc_candles: свечи BTC на рабочем ТФ (5m) — для BTC-фильтра (hour change)
+    btc_senior_candles: свечи BTC на старшем ТФ (1h) — для market regime detection
     """
     candles_5m = candles_by_tf.get(config.TF_WORK)
     candles_15m = candles_by_tf.get(config.TF_MIDDLE)
@@ -421,6 +426,21 @@ def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
     if candles_5m is None or len(candles_5m) < 20:
         return []
 
+    # Шаг 0: ATR filter — пропуск при экстремальной волатильности (самый ранний выход)
+    if config.ATR_FILTER_ENABLED:
+        atr = levels.get("atr", 0)
+        current_price = float(candles_5m[-1, 4])
+        if current_price > 0 and atr > 0:
+            atr_pct = atr / current_price * 100
+            if atr_pct > config.ATR_MAX_PCT:
+                log.debug("%s ATR слишком высокий %.2f%% > %.2f%%, пропуск",
+                          symbol, atr_pct, config.ATR_MAX_PCT)
+                return []
+            if atr_pct < config.ATR_MIN_PCT:
+                log.debug("%s ATR слишком низкий %.2f%% < %.2f%%, пропуск",
+                          symbol, atr_pct, config.ATR_MIN_PCT)
+                return []
+
     # Шаг 1: ищем сигналы на 5m (уровни уже MTF)
     all_signals = []
     all_signals.extend(detect_bounce(candles_5m, levels, volume))
@@ -428,6 +448,43 @@ def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
 
     if not all_signals:
         return []
+
+    # Шаг 1.2: Pattern filter — если включён whitelist, оставляем только разрешённые паттерны
+    if config.PATTERN_FILTER_ENABLED and config.ENABLED_PATTERNS:
+        after_pattern = []
+        for sig in all_signals:
+            reason = sig.get("reason", "")
+            if any(pattern in reason for pattern in config.ENABLED_PATTERNS):
+                after_pattern.append(sig)
+            else:
+                log.debug("%s %s отфильтрован pattern: %s",
+                          symbol, sig["type"], reason)
+        all_signals = after_pattern
+        if not all_signals:
+            return []
+
+    # Шаг 1.5: Market regime filter — блок сделок против тренда (самый дешёвый фильтр)
+    if config.REGIME_FILTER_ENABLED and btc_senior_candles is not None and len(btc_senior_candles) > 0:
+        regime_info = detect_regime(
+            btc_senior_candles,
+            sma_fast=config.REGIME_SMA_FAST,
+            sma_slow=config.REGIME_SMA_SLOW,
+            slope_lookback=config.REGIME_SLOPE_LOOKBACK,
+            slope_threshold_pct=config.REGIME_SLOPE_THRESHOLD_PCT,
+        )
+        regime = regime_info["regime"]
+        after_regime = []
+        for sig in all_signals:
+            if is_direction_allowed(regime, sig["direction"],
+                                      block_counter_trend=config.REGIME_BLOCK_COUNTER_TREND):
+                sig["regime_check"] = regime_info
+                after_regime.append(sig)
+            else:
+                log.info("%s %s %s заблокирован regime: %s",
+                         symbol, sig["type"], sig["direction"], regime_info["reason"])
+        all_signals = after_regime
+        if not all_signals:
+            return []
 
     # Шаг 2: фильтруем через 15m подтверждение
     after_middle = []

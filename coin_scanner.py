@@ -26,8 +26,14 @@ class CoinScanner:
         if not all_tickers:
             log.warning("Не удалось получить тикеры, используем запасной список")
             self.last_scan_time = time.time()
-            self.current_watchlist = config.WATCHLIST_FALLBACK
-            return config.WATCHLIST_FALLBACK
+            # Фильтруем фолбэк по blacklist (чтобы не торговать заведомо убыточные)
+            fallback = [s for s in config.WATCHLIST_FALLBACK
+                        if s.split("/")[0] not in config.COIN_BLACKLIST]
+            if len(fallback) < len(config.WATCHLIST_FALLBACK):
+                removed = set(config.WATCHLIST_FALLBACK) - set(fallback)
+                log.info("Blacklist: удалены из фолбэка %s", removed)
+            self.current_watchlist = fallback
+            return fallback
 
         log.info("Найдено %d фьючерсных пар", len(all_tickers))
 
@@ -84,8 +90,10 @@ class CoinScanner:
             return []
 
     def _filter_pairs(self, tickers: list[dict]) -> list[dict]:
-        # Объединяем все исключения
-        excluded = config.EXCLUDED_FUNDAMENTAL | config.EXCLUDED_STABLECOINS
+        # Объединяем все исключения: фундаментальные, стейблы и blacklist
+        excluded = (config.EXCLUDED_FUNDAMENTAL
+                    | config.EXCLUDED_STABLECOINS
+                    | config.COIN_BLACKLIST)
         filtered = []
 
         for t in tickers:
