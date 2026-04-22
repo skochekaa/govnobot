@@ -110,7 +110,7 @@ UPDATE_INTERVAL = 5
 # После N убыточных сделок подряд — пауза на M минут.
 # Защита от серийных потерь при резком изменении рынка.
 # Счётчик сбрасывается после любой прибыльной сделки или после срабатывания.
-CIRCUIT_BREAKER_ENABLED = False
+CIRCUIT_BREAKER_ENABLED = True
 CIRCUIT_BREAKER_LOSSES = 5
 CIRCUIT_BREAKER_PAUSE_MINUTES = 60
 
@@ -118,7 +118,7 @@ CIRCUIT_BREAKER_PAUSE_MINUTES = 60
 # Если дневной убыток превысил DAILY_LOSS_LIMIT_PCT от стартового баланса дня,
 # новые сделки не открываются до следующего календарного дня (UTC).
 # Существующие сделки продолжают управляться (стопы/тейки).
-DAILY_LOSS_LIMIT_ENABLED = False
+DAILY_LOSS_LIMIT_ENABLED = True
 DAILY_LOSS_LIMIT_PCT = 3.0
 
 # ── ATR Filter ────────────────────────────────
