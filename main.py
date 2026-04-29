@@ -19,11 +19,17 @@ from log_setup import setup_logger
 from exchange import Exchange
 from levels import detect_levels_mtf
 from volume_analyzer import analyze_volume
-from signals import generate_signals_mtf
 from trader import PaperTrader
 from logger_mod import TradeLogger
 from analytics import generate_daily_report, analyze_trade
 from coin_scanner import CoinScanner
+
+# Выбор стратегии: bounce (signals.py) или trend (signals_trend.py)
+# Обе функции имеют одинаковый интерфейс generate_signals_mtf(...)
+if config.STRATEGY_MODE == "trend":
+    from signals_trend import generate_signals_mtf
+else:  # default: bounce
+    from signals import generate_signals_mtf
 
 log = setup_logger("main")
 running = True
@@ -72,6 +78,7 @@ async def run_bot():
 
     log.info("=" * 55)
     log.info("СКАЛЬПИНГ-БОТ (Paper Trading) — WebSocket + MTF")
+    log.info("Стратегия: %s", config.STRATEGY_MODE.upper())
     log.info("Баланс: %s USDT | Плечо: %sx | Риск: %s%%",
              config.INITIAL_BALANCE, config.LEVERAGE,
              config.RISK_PER_TRADE * 100)

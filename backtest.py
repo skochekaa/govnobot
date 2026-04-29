@@ -32,7 +32,11 @@ import config
 from log_setup import setup_logger
 from levels import detect_levels_mtf
 from volume_analyzer import analyze_volume
-from signals import generate_signals_mtf
+# Dispatcher: bounce или trend, в зависимости от config.STRATEGY_MODE
+if config.STRATEGY_MODE == "trend":
+    from signals_trend import generate_signals_mtf
+else:
+    from signals import generate_signals_mtf
 from trader import PaperTrader
 from analytics import generate_daily_report
 
