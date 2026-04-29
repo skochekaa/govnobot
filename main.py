@@ -24,11 +24,14 @@ from logger_mod import TradeLogger
 from analytics import generate_daily_report, analyze_trade
 from coin_scanner import CoinScanner
 
-# Выбор стратегии: bounce (signals.py) или trend (signals_trend.py)
-# Обе функции имеют одинаковый интерфейс generate_signals_mtf(...)
-if config.STRATEGY_MODE == "trend":
+# Выбор стратегии: bounce, trend или auto (обе параллельно)
+# Все функции имеют одинаковый интерфейс generate_signals_mtf(...)
+if config.STRATEGY_MODE == "auto":
+    from signals import generate_signals_mtf as bounce_signals_mtf
+    from signals_trend import generate_signals_mtf as trend_signals_mtf
+elif config.STRATEGY_MODE == "trend":
     from signals_trend import generate_signals_mtf
-else:  # default: bounce
+else:  # bounce
     from signals import generate_signals_mtf
 
 log = setup_logger("main")
@@ -41,6 +44,63 @@ def handle_shutdown(signum, frame):
     global running
     log.info("Получен сигнал остановки...")
     running = False
+
+
+def _strength_score(strength: str) -> int:
+    """Числовой score для ранжирования сигналов."""
+    return {"strong": 3, "medium": 2, "weak": 1}.get(strength, 0)
+
+
+def resolve_strategy_conflicts(trend_signals: list, bounce_signals: list,
+                                 symbol: str) -> list:
+    """
+    Разрешает конфликты между сигналами двух стратегий на одном символе.
+
+    Правила:
+      - Если все сигналы в ОДНУ сторону → берём с высшей силой
+      - Если обе стратегии согласны (один long от trend + один long от bounce)
+        → отмечаем как "consensus" (сильный консенсус-сигнал)
+      - Если разные направления → пропускаем оба (неопределённость рынка)
+
+    Args:
+        trend_signals: список сигналов от trend-стратегии для этого символа
+        bounce_signals: список сигналов от bounce-стратегии для этого символа
+        symbol: символ для логирования
+
+    Returns:
+        Список итоговых сигналов (0 или 1 элемент)
+    """
+    # Тегируем каждый сигнал
+    for s in trend_signals:
+        s["strategy"] = "trend"
+    for s in bounce_signals:
+        s["strategy"] = "bounce"
+
+    all_sigs = trend_signals + bounce_signals
+    if not all_sigs:
+        return []
+
+    directions = set(s["direction"] for s in all_sigs)
+    if len(directions) > 1:
+        # Конфликт направлений
+        log.info("%s: конфликт стратегий (trend+bounce разные направления), пропуск", symbol)
+        return []
+
+    # Все в одну сторону — выбираем лучший
+    best = max(all_sigs, key=lambda s: (
+        _strength_score(s.get("strength", "weak")),
+        s.get("risk_reward", 0)
+    ))
+
+    # Если обе стратегии дали сигнал в одну сторону → consensus
+    if trend_signals and bounce_signals:
+        best["strategy"] = "consensus"
+        # Бонус к силе: если был "medium" → "strong" (две стратегии согласны)
+        if best.get("strength") == "medium":
+            best["strength"] = "strong"
+        log.info("%s: consensus (trend + bounce согласны: %s)", symbol, best["direction"])
+
+    return [best]
 
 
 def is_in_active_session() -> bool:
@@ -188,13 +248,31 @@ async def process_cycle(exchange: Exchange, trader: PaperTrader,
             delta = exchange.calculate_buy_sell_delta(symbol)
             volume = analyze_volume(candles_by_tf[config.TF_WORK], levels, delta)
 
-            # MTF-сигналы
-            signals = generate_signals_mtf(
-                candles_by_tf, levels, volume,
-                btc_candles=btc_candles,
-                btc_senior_candles=btc_senior_candles,
-                symbol=symbol,
-            )
+            # MTF-сигналы — в auto режиме вызываем обе стратегии
+            if config.STRATEGY_MODE == "auto":
+                trend_sigs = trend_signals_mtf(
+                    candles_by_tf, levels, volume,
+                    btc_candles=btc_candles,
+                    btc_senior_candles=btc_senior_candles,
+                    symbol=symbol,
+                )
+                bounce_sigs = bounce_signals_mtf(
+                    candles_by_tf, levels, volume,
+                    btc_candles=btc_candles,
+                    btc_senior_candles=btc_senior_candles,
+                    symbol=symbol,
+                )
+                signals = resolve_strategy_conflicts(trend_sigs, bounce_sigs, symbol)
+            else:
+                signals = generate_signals_mtf(
+                    candles_by_tf, levels, volume,
+                    btc_candles=btc_candles,
+                    btc_senior_candles=btc_senior_candles,
+                    symbol=symbol,
+                )
+                # Тегируем сигналы для статистики
+                for sig in signals:
+                    sig.setdefault("strategy", config.STRATEGY_MODE)
 
             for sig in signals:
                 logger.log_signal(sig)

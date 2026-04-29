@@ -106,6 +106,30 @@ def analyze(csv_path):
         wr = w / len(items) * 100
         print(f"  {strength:10s} {len(items):3d} сд. | WR: {wr:5.1f}% | PnL: {pnl:+8.2f}")
 
+    # По стратегии (для STRATEGY_MODE="auto")
+    if any("strategy" in t for t in trades):
+        print(f"\n{'='*70}")
+        print("ПО СТРАТЕГИИ:")
+        print(f"{'='*70}")
+        by_strategy = defaultdict(list)
+        for t in trades:
+            by_strategy[t.get("strategy", "unknown")].append(t)
+        strat_stats = []
+        for name, items in by_strategy.items():
+            w = sum(1 for t in items if t["result"] == "win")
+            pnl = sum(t["pnl"] for t in items)
+            wins_sum = sum(t["pnl"] for t in items if t["pnl"] > 0)
+            losses_sum = abs(sum(t["pnl"] for t in items if t["pnl"] < 0))
+            pf = wins_sum / losses_sum if losses_sum > 0 else float('inf')
+            wr = w / len(items) * 100 if items else 0
+            strat_stats.append((name, len(items), w, wr, pnl, pf))
+        strat_stats.sort(key=lambda x: x[4], reverse=True)
+        for name, n, w, wr, pnl, pf in strat_stats:
+            pf_str = f"{pf:.2f}" if pf != float('inf') else "inf"
+            marker = "OK " if pnl > 0 else "BAD"
+            print(f"  [{marker}] {name:12s} {n:3d} сд. | WR: {wr:5.1f}% | "
+                  f"PnL: {pnl:+8.2f} | PF: {pf_str}")
+
     # Комбинации: направление + reason
     print(f"\n{'='*70}")
     print("КОМБИНАЦИИ (направление + причина) — где бот зарабатывает/сливает:")
