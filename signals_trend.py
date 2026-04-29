@@ -8,7 +8,7 @@
 #   - Альтернативный вход: пробой консолидации в направлении тренда
 #
 # ЦЕПОЧКА РЕШЕНИЯ:
-#   1h уровни (для тейков/стопов) → 15m тренд → 5m откат к EMA20 → 1m реакция
+#   TF_SENIOR (4h) уровни → TF_MIDDLE (1h) тренд → TF_WORK (15m) откат к EMA20 → TF_ENTRY (5m) реакция
 #
 # Интерфейс полностью совместим с signals.py (generate_signals_mtf)
 # чтобы main.py мог переключаться через config.STRATEGY_MODE.
@@ -397,8 +397,8 @@ def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
     для прозрачной замены через config.STRATEGY_MODE.
 
     Цепочка:
-      1. Определить тренд на 15m (старший работающий ТФ)
-      2. Если тренд up/down → искать pullback и breakout entry на 5m
+      1. Определить тренд на TF_MIDDLE
+      2. Если тренд up/down → искать pullback и breakout entry на TF_WORK
       3. Применить regime фильтр (как в bounce)
       4. Вернуть сигналы отсортированные по силе
     """
@@ -426,7 +426,7 @@ def generate_signals_mtf(candles_by_tf: dict[str, np.ndarray],
                 return []
 
     # ── Шаг 1: определение тренда ──
-    # Берём 15m как базовый ТФ для определения тренда (компромисс между шумом и реакцией)
+    # Берём TF_MIDDLE как базовый ТФ для определения тренда (компромисс между шумом и реакцией)
     trend_source = candles_15m if (candles_15m is not None and len(candles_15m) >= 30) else candles_5m
     trend = detect_trend(trend_source)
 

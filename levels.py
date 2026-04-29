@@ -157,7 +157,8 @@ def detect_levels_mtf(candles_by_tf: dict[str, np.ndarray]) -> dict:
       Это ОЧЕНЬ сильный уровень (видно на двух ТФ).
 
     Аргументы:
-        candles_by_tf: {"1h": np.array, "15m": np.array, "5m": np.array}
+        candles_by_tf: {"<tf>": np.array, ...} — словарь свечей по таймфреймам
+            Например: {"4h": ..., "1h": ..., "15m": ...} — таймфреймы из TF_LEVEL_WEIGHTS
 
     Возвращает тот же формат что detect_levels(), но с MTF-силой.
     """

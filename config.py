@@ -73,25 +73,26 @@ WATCHLIST_FALLBACK = [
 #   реакция от уровня (wick, поглощение, замедление).
 #   Это даёт более точный вход и более короткий стоп.
 
-TF_SENIOR = "1h"    # ключевые уровни
-TF_MIDDLE = "15m"   # подтверждение тренда
-TF_WORK = "5m"      # поиск сигнала
-TF_ENTRY = "1m"     # точный вход
+TF_SENIOR = "4h"    # ключевые уровни (старший таймфрейм)
+TF_MIDDLE = "1h"    # подтверждение тренда
+TF_WORK = "15m"     # поиск сигнала (рабочий ТФ)
+TF_ENTRY = "5m"     # точный вход
 
 # Вес уровней с каждого таймфрейма при объединении.
 # Чем старше ТФ — тем сильнее уровень.
 TF_LEVEL_WEIGHTS = {
-    "1h": 3,    # уровень с часовика = сила x3
-    "15m": 2,   # уровень с 15m = сила x2
-    "5m": 1,    # уровень с 5m = сила x1
+    "4h": 3,    # уровень с 4h = сила x3
+    "1h": 2,    # уровень с 1h = сила x2
+    "15m": 1,   # уровень с 15m = сила x1
 }
 
 # Сколько свечей загружать для каждого ТФ
 TF_CANDLE_LIMITS = {
+    "4h": 100,   # 100 * 4h = ~16 дней (для крупных уровней)
     "1h": 100,   # 100 часов = ~4 дня
     "15m": 200,  # 200 * 15m = ~2 дня
     "5m": 200,   # 200 * 5m = ~17 часов
-    "1m": 100,   # 100 минут = ~1.5 часа
+    "1m": 100,   # 100 минут = ~1.5 часа (на случай возврата)
 }
 
 # ── Определение уровней ──────────────────────
@@ -187,23 +188,26 @@ BTC_PUMP_THRESHOLD = 1.0
 # Если включить, то будут торговаться ТОЛЬКО сигналы чей reason содержит
 # одну из подстрок в ENABLED_PATTERNS.
 #
-# Доступные паттерны (reason в сигнале):
-#   "5m bullish candle at support"         — бычья свеча у поддержки (лонг)
-#   "5m momentum slowdown at support"      — замедление у поддержки (лонг)
-#   "5m rejection wick at support"         — проколы у поддержки (лонг)
-#   "5m bearish candle at resistance"      — медвежья свеча у сопротивления (шорт)
-#   "5m momentum slowdown at resistance"   — замедление у сопротивления (шорт)
-#   "5m rejection wick at resistance"      — проколы у сопротивления (шорт)
-#   "breakout"                              — пробой уровня (breakout above/below)
+# Доступные паттерны (reason в сигнале) — поиск через substring,
+# поэтому "5m"/"15m" префикс таймфрейма НЕ важен:
+#   "bullish candle at support"         — бычья свеча у поддержки (лонг)
+#   "momentum slowdown at support"      — замедление у поддержки (лонг)
+#   "rejection wick at support"         — проколы у поддержки (лонг)
+#   "bearish candle at resistance"      — медвежья свеча у сопротивления (шорт)
+#   "momentum slowdown at resistance"   — замедление у сопротивления (шорт)
+#   "rejection wick at resistance"      — проколы у сопротивления (шорт)
+#   "breakout"                          — пробой уровня (breakout above/below)
+#   "pullback to EMA"                   — trend pullback (для STRATEGY_MODE=trend)
 PATTERN_FILTER_ENABLED = False
 ENABLED_PATTERNS = {
-    "5m bullish candle at support",
-    "5m momentum slowdown at support",
-    "5m rejection wick at support",
-    "5m bearish candle at resistance",
-    "5m momentum slowdown at resistance",
-    "5m rejection wick at resistance",
+    "bullish candle at support",
+    "momentum slowdown at support",
+    "rejection wick at support",
+    "bearish candle at resistance",
+    "momentum slowdown at resistance",
+    "rejection wick at resistance",
     "breakout",
+    "pullback to EMA",
 }
 
 # ── Market Regime Filter ──────────────────────

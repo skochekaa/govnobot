@@ -276,29 +276,31 @@ def _check_rejection(candles, level_price, direction, atr):
     if candle_range == 0:
         return {"detected": False, "reason": ""}
 
+    tf = config.TF_WORK  # текущий рабочий таймфрейм для логов
+
     if direction == "long":
         lower_wick = min(open_p, close) - low
         wick_ratio = lower_wick / candle_range
         if wick_ratio > 0.5:
-            return {"detected": True, "reason": f"5m rejection wick at support ({wick_ratio:.0%})"}
+            return {"detected": True, "reason": f"{tf} rejection wick at support ({wick_ratio:.0%})"}
         if close > open_p and lower_wick > atr * 0.3:
-            return {"detected": True, "reason": "5m bullish candle at support"}
+            return {"detected": True, "reason": f"{tf} bullish candle at support"}
         if len(candles) >= 3:
             ranges = [float(c[2] - c[3]) for c in candles[-3:]]
             if ranges[-1] < ranges[-2] < ranges[-3]:
-                return {"detected": True, "reason": "5m momentum slowdown at support"}
+                return {"detected": True, "reason": f"{tf} momentum slowdown at support"}
 
     elif direction == "short":
         upper_wick = high - max(open_p, close)
         wick_ratio = upper_wick / candle_range
         if wick_ratio > 0.5:
-            return {"detected": True, "reason": f"5m rejection wick at resistance ({wick_ratio:.0%})"}
+            return {"detected": True, "reason": f"{tf} rejection wick at resistance ({wick_ratio:.0%})"}
         if close < open_p and upper_wick > atr * 0.3:
-            return {"detected": True, "reason": "5m bearish candle at resistance"}
+            return {"detected": True, "reason": f"{tf} bearish candle at resistance"}
         if len(candles) >= 3:
             ranges = [float(c[2] - c[3]) for c in candles[-3:]]
             if ranges[-1] < ranges[-2] < ranges[-3]:
-                return {"detected": True, "reason": "5m momentum slowdown at resistance"}
+                return {"detected": True, "reason": f"{tf} momentum slowdown at resistance"}
 
     return {"detected": False, "reason": ""}
 
