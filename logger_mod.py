@@ -54,7 +54,8 @@ class TradeLogger:
             "close_price", "quantity", "position_usdt",
             "risk_amount", "risk_reward",
             "pnl", "pnl_pct", "result", "close_reason",
-            "strength", "reason", "open_time", "close_time",
+            "strength", "reason", "strategy",
+            "open_time", "close_time",
         ]
         with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(headers)
@@ -69,8 +70,8 @@ class TradeLogger:
             trade.get("risk_reward"), trade.get("pnl"),
             trade.get("pnl_pct"), trade.get("result"),
             trade.get("close_reason"), trade.get("strength"),
-            trade.get("reason"), trade.get("open_time"),
-            trade.get("close_time"),
+            trade.get("reason"), trade.get("strategy", "unknown"),
+            trade.get("open_time"), trade.get("close_time"),
         ]
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(row)

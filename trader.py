@@ -136,6 +136,7 @@ class PaperTrader:
             "risk_reward": signal["risk_reward"],
             "strength": signal["strength"],
             "reason": signal["reason"],
+            "strategy": signal.get("strategy", "unknown"),
             "open_time": datetime.now().isoformat(),
             "open_timestamp": time.time(),
             "status": "open",
