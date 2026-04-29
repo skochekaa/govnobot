@@ -9,8 +9,8 @@ API_SECRET = ""
 # ── Автоматический отбор монет (Scanner) ─────
 SCANNER_TOP_N = 7
 SCANNER_MIN_VOLUME_24H = 10_000_000
-SCANNER_MAX_SPREAD_PCT = 0.05
-SCANNER_IDEAL_VOLATILITY = 3.0
+SCANNER_MAX_SPREAD_PCT = 0.15  # было 0.05 — слишком строго, отсекало большинство альтов
+SCANNER_IDEAL_VOLATILITY = 5.0  # было 3.0 — для скальпа выше волатильность лучше
 SCANNER_INTERVAL_MINUTES = 60
 
 EXCLUDED_FUNDAMENTAL = {
@@ -27,8 +27,17 @@ EXCLUDED_STABLECOINS = {
 # Можно пополнять по мере выявления проблемных монет.
 COIN_BLACKLIST = {"1000BONK", "1000PEPE"}
 WATCHLIST_FALLBACK = [
-    "1000PEPE/USDT:USDT", "WIF/USDT:USDT", "DOGE/USDT:USDT",
-    "1000BONK/USDT:USDT", "1000FLOKI/USDT:USDT",
+    # Memecoins с высокой ликвидностью
+    "WIF/USDT:USDT", "DOGE/USDT:USDT", "1000FLOKI/USDT:USDT",
+    "SHIB/USDT:USDT", "MEME/USDT:USDT",
+    # AI / тренд-токены
+    "FET/USDT:USDT", "WLD/USDT:USDT", "RNDR/USDT:USDT",
+    "INJ/USDT:USDT", "TIA/USDT:USDT",
+    # Крупные альты с активной торговлей
+    "OP/USDT:USDT", "ARB/USDT:USDT", "SUI/USDT:USDT",
+    "APT/USDT:USDT", "SEI/USDT:USDT",
+    # Новые/трендовые
+    "JTO/USDT:USDT", "PYTH/USDT:USDT", "ORDI/USDT:USDT",
 ]
 
 # ── Мультитаймфрейм (MTF) ───────────────────
